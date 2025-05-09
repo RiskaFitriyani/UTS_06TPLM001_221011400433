@@ -1,183 +1,156 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart'; // Import untuk inisialisasi data lokal
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('id_ID', null);
-  runApp(const RiskaWeatherApp());
+void main() {
+  runApp(const MyApp());
 }
 
-class RiskaWeatherApp extends StatelessWidget {
-  const RiskaWeatherApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Riska Fitriyani',
       debugShowCheckedModeBanner: false,
-      title: 'riska fitriyani',
-      home: const WeatherHome(),
+      home: const RiskaWeatherApp(),
     );
   }
 }
 
-class WeatherHome extends StatefulWidget {
-  const WeatherHome({super.key});
+class RiskaWeatherApp extends StatefulWidget {
+  const RiskaWeatherApp({super.key});
 
   @override
-  State<WeatherHome> createState() => _WeatherHomeState();
+  State<RiskaWeatherApp> createState() => _RiskaWeatherAppState();
 }
 
-class _WeatherHomeState extends State<WeatherHome> {
-  String cityName = '...';
-  String description = '';
-  double temp = 0;
-  double tempMin = 0;
-  double tempMax = 0;
-  String icon = '';
-  bool isLoading = true;
-
-  final String apiKey = 'cc1d1bf9392226fcb259e175e91d7f5a';
+class _RiskaWeatherAppState extends State<RiskaWeatherApp> {
+  String kota = "Harap tunggu";
+  double suhu = 0;
+  double suhuRendah = 0;
+  double suhuTinggi = 0;
+  String cuaca = "Harap tunggu";
+  String tanggal = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
 
   @override
   void initState() {
     super.initState();
-    getLocationAndWeather();
+    _initLocationAndFetchWeather();
   }
 
-  Future<void> getLocationAndWeather() async {
-    try {
-      // Minta izin lokasi
-      LocationPermission permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        setState(() {
-          description = 'Izin lokasi ditolak';
-          isLoading = false;
-        });
-        return;
-      }
+  Future<void> _initLocationAndFetchWeather() async {
+    final status = await Permission.location.request();
 
-      // Ambil lokasi pengguna
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      // Ambil nama kota
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      if (placemarks.isNotEmpty) {
-        cityName = placemarks[0].locality ?? 'Lokasi Tidak Dikenal';
-      }
-
-      // Panggil API cuaca
-      final url =
-          'https://api.openweathermap.org/data/2.5/weather?lat=${position.latitude}&lon=${position.longitude}&appid=$apiKey&units=metric&lang=id';
-      final response = await http.get(Uri.parse(url));
-      final data = json.decode(response.body);
-
+    if (status.isGranted) {
+      _fetchWeather();
+    } else {
       setState(() {
-        description = data['weather'][0]['description'];
-        icon = data['weather'][0]['icon'];
-        temp = data['main']['temp'];
-        tempMin = data['main']['temp_min'];
-        tempMax = data['main']['temp_max'];
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        description = 'Gagal mengambil data';
-        isLoading = false;
+        kota = "Akses ditolak";
       });
     }
   }
 
-  String getFormattedDate() {
-    final now = DateTime.now();
-    final formatter = DateFormat(
-      'EEEE, dd MMMM yyyy',
-      'id_ID',
-    ); // Tambahkan tahun agar lebih lengkap
-    return formatter.format(now);
+  Future<void> _fetchWeather() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        // ignore: deprecated_member_use
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      String apiKey = 'f373bfa1a9f89e6a280ed0b32849b605';
+      String url =
+          'https://api.openweathermap.org/data/2.5/weather?lat=${position.latitude}&lon=${position.longitude}&appid=$apiKey&units=metric';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        setState(() {
+          kota = data['name'] ?? 'Unknown';
+          suhu = data['main']['temp'].toDouble();
+          suhuRendah = data['main']['temp_min'].toDouble();
+          suhuTinggi = data['main']['temp_max'].toDouble();
+          cuaca = data['weather'][0]['main'];
+        });
+      } else {
+        setState(() {
+          kota = "Gagal ambil data";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        kota = "Error: $e";
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final dateText = getFormattedDate();
-
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF88BBD6), Color(0xFF1E3C72)],
-          ),
-        ),
-        child: Center(
-          child:
-              isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        cityName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        dateText,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Image.network(
-                        'https://openweathermap.org/img/wn/$icon@2x.png',
-                        width: 100,
-                        height: 100,
-                      ),
-                      Text(
-                        '${temp.toStringAsFixed(0)}°C',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 80,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Container(width: 150, height: 1, color: Colors.white54),
-                      const SizedBox(height: 20),
-                      Text(
-                        description[0].toUpperCase() + description.substring(1),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${tempMin.toStringAsFixed(0)}°C / ${tempMax.toStringAsFixed(0)}°C',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset('assets/bg.jpeg', fit: BoxFit.cover),
+          // ignore: deprecated_member_use
+          Container(color: Colors.black.withOpacity(0.4)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 80),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  kota,
+                  style: TextStyle(
+                    fontSize: 38,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
-        ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tanggal,
+                  style: const TextStyle(fontSize: 22, color: Colors.white70),
+                ),
+
+                const SizedBox(height: 80),
+                Text(
+                  "${suhu.round()}°C",
+                  style: const TextStyle(
+                    fontSize: 80,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Divider(color: Colors.white, thickness: 1.5),
+                const SizedBox(height: 10),
+                Text(
+                  cuaca,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "${suhuRendah.round()}°C / ${suhuTinggi.round()}°C",
+                  style: const TextStyle(
+                    fontSize: 20,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 90),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

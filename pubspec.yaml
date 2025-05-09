@@ -14,6 +14,8 @@ dependencies:
   geolocator: ^14.0.0
   geocoding: ^3.0.0
   cupertino_icons: ^1.0.8
+  permission_handler: ^12.0.0+1
+ 
 
 dev_dependencies:
   flutter_test:
@@ -22,3 +24,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/bg.jpeg
